@@ -28,7 +28,15 @@ FetchContent_Declare(cpr
   GIT_SHALLOW ON
 )
 
-FetchContent_MakeAvailable(rzutils luadl spdlog cpr)
+FetchContent_Declare(argparse
+  GIT_REPOSITORY "https://github.com/p-ranav/argparse.git"
+  GIT_TAG "v3.2"
+  GIT_SHALLOW ON
+)
+
+set(BUILD_SHARED_LIBS OFF)
+
+FetchContent_MakeAvailable(rzutils luadl spdlog cpr argparse)
 
 
 add_library(lua STATIC)
@@ -54,4 +62,10 @@ target_sources(rzsvr PRIVATE ${PROJ_SRC})
 
 target_compile_features(rzsvr PRIVATE cxx_std_23)
 
-target_link_libraries(rzsvr PRIVATE rzutils lua spdlog::spdlog cpr::cpr)
+target_link_libraries(rzsvr PRIVATE
+  rzutils
+  lua
+  spdlog::spdlog
+  cpr::cpr
+  argparse::argparse
+)
