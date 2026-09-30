@@ -6,8 +6,14 @@
 #include <spdlog/spdlog.h>
 #include <cpr/cpr.h>
 
+#include <string_view>
+#include <string>
+#include <format>
+
+constexpr std::string_view STEAMCMD_URL{"https://client-update.steamstatic.com/installer/steamcmd_linux.tar.gz"};
+
 SteamCmdManager::SteamCmdManager(std::filesystem::path installDir)
-    : m_installDir(std::move(installDir)) {}
+    : m_installDir(installDir) {}
 
 bool SteamCmdManager::isInstalled() const {
     return std::filesystem::exists(m_installDir / "steamcmd.sh");
@@ -19,7 +25,7 @@ bool SteamCmdManager::setup() {
         return true;
     }
 
-    spdlog::info("SteamCMD not found. Starting installation process...");
+    //spdlog::info("SteamCMD not found. Starting installation process...");
 
     std::error_code ec;
     std::filesystem::create_directories(m_installDir, ec);
@@ -34,7 +40,7 @@ bool SteamCmdManager::setup() {
     if(!initializeSteamCmd()) return false;
 
     // --- FIX VALVE'S STEAMCLIENT.SO BUG ---
-    spdlog::info("Applying Steamworks SDK symlink patch...");
+    spdlog::info("Applying steamclient.so symlink fix...");
 
     const char* home = std::getenv("HOME");
     if (home) {
@@ -54,6 +60,8 @@ bool SteamCmdManager::setup() {
                 spdlog::info("Successfully linked steamclient.so to ~/.steam/sdk64/");
             }
         }
+    } else {
+        spdlog::error("Failed to find home directory! Did not apply fix!");
     }
 
     return true;
@@ -109,11 +117,22 @@ bool SteamCmdManager::initializeSteamCmd() {
     }
 }
 
-bool SteamCmdManager::updateApp(int appId, const std::filesystem::path& installDir) {
-    spdlog::info("Updating AppID {} into {}", appId, installDir.string());
-    std::string cmd = (m_installDir / "steamcmd.sh").string() +
-                      " +force_install_dir " + installDir.string() +
-                      " +login anonymous +app_update " + std::to_string(appId) + " validate +quit";
+bool SteamCmdManager::updateApp(std::string_view appId, OptionalConstPathRef appInstallDir) {
+    spdlog::info("Updating AppID {} into {}", appId,
+        (!appInstallDir.has_value() ? "default Steam app directory." : appInstallDir->get().string())
+    );
+
+    std::string forceInstall = appInstallDir.has_value() ?
+            (" +force_install_dir " + appInstallDir->get().string())
+            :
+            "";
+
+    std::string cmd = std::format(
+       "{}{} +login anonymous +app_update {} validate +quit",
+       (m_installDir / "steamcmd.sh").string(),
+       forceInstall,
+       appId
+    );
 
     int result = std::system(cmd.c_str());
     return result == 0;

@@ -1,19 +1,23 @@
 #pragma once
-#include <string>
 #include <filesystem>
+#include <optional>
+#include <functional>
+
+#include <string_view>
 
 class SteamCmdManager {
 public:
 
     explicit SteamCmdManager(std::filesystem::path installDir);
 
+    using OptionalConstPathRef = std::optional<std::reference_wrapper<const std::filesystem::path>>;
+
     bool setup();
     bool isInstalled() const;
-    bool updateApp(int appId, const std::filesystem::path& installDir);
+    bool updateApp(std::string_view appId, OptionalConstPathRef appInstallDir = std::nullopt);
 
 private:
     std::filesystem::path m_installDir;
-    const std::string STEAMCMD_URL = "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz";
 
     bool downloadArchive(const std::filesystem::path& archivePath);
     bool extractArchive(const std::filesystem::path& archivePath);
