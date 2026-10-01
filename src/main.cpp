@@ -49,7 +49,7 @@ int main(int argc, char** argv)
         spdlog::error("Failed to get app config path!");
         return 1;
     }
-    rz::json::Saveable<AppSettings> appSettings{configPath, 4};
+    rz::json::Saveable<AppSettings> appSettings{configPath, APPSETTINGS_INDENT};
 
     /* ------------------------------------- BEFORE LOADING CONFIG ------------------------------------- */
 

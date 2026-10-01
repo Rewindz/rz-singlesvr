@@ -3,6 +3,7 @@
 
 #include <nlohmann/json.hpp>
 
+constexpr int APPSETTINGS_INDENT = 4;
 
 struct AppSettings
 {

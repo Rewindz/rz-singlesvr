@@ -64,8 +64,11 @@ target_compile_features(rzsvr PRIVATE cxx_std_23)
 
 target_link_libraries(rzsvr PRIVATE
   rzutils
-  lua
   spdlog::spdlog
   cpr::cpr
   argparse::argparse
 )
+
+target_include_directories(rzsvr PRIVATE "${CMAKE_SOURCE_DIR}/include")
+
+add_subdirectory("daemon")
