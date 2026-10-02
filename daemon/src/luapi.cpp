@@ -1,4 +1,3 @@
-#include "lua.h"
 #include <lua.hpp>
 
 static int l_GetVersion(lua_State* L)

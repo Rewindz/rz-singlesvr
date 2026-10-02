@@ -1,6 +1,5 @@
 
 #include <exception>
-#include <print>
 #include <iostream>
 
 #include <spdlog/spdlog.h>
@@ -11,6 +10,8 @@
 
 #include "settings.hpp"
 #include "steamcmd.hpp"
+#include "ipc.hpp"
+#include "socketfd.hpp"
 
 int main(int argc, char** argv)
 {
@@ -31,15 +32,16 @@ int main(int argc, char** argv)
         .flag()
         .help("update/install the app (with appid from the config)");
 
+    program.add_argument("--stop")
+        .flag()
+        .help("stop the app");
+
     try {
-
         program.parse_args(argc, argv);
-
     } catch (const std::exception& e) {
         spdlog::error("{}\n{}", e.what(), program.help().str());
         return 1;
     }
-
 
     auto appPath = rz::fs::GetAppConfigPath("rzsvr");
     std::filesystem::path configPath{};
@@ -149,7 +151,56 @@ int main(int argc, char** argv)
             spdlog::error("Failed to update {}!", appSettings->app_id);
             return 1;
         }
+    }
 
+    if(program["--stop"] == true) {
+        SocketFd client {SocketFd::GetSocket()};
+        if(!client.is_valid()) {
+            spdlog::error("Failed to create socket for IPC");
+            return 1;
+        }
+        auto [addr, addr_len] = SocketFd::MakeAddr(SOCKET_NAME);
+
+        if(connect(client.get(), reinterpret_cast<sockaddr*>(&addr), addr_len) == -1) {
+            spdlog::error("Failed to connect. Is the daemon running?");
+            return 1;
+        }
+
+        IPCMessage msg {
+          .action = IPCAction::STOP,
+        };
+
+        std::string cmd = nlohmann::json{msg}.dump();
+
+        if(send(client.get(), cmd.data(), cmd.size(), 0) == -1) {
+            spdlog::error("Failed to send command!");
+            spdlog::debug("Failed command: {}", cmd);
+            return 1;
+        }
+
+        // read reply
+        std::array<char, 1024> buffer;
+        ssize_t bytesRead = recv(client.get(), buffer.data(), buffer.size(), 0);
+        if(bytesRead <= 0) {
+            spdlog::error("Daemon did not reply.");
+            return 1;
+        }
+
+        try {
+            std::string_view bufView{buffer.data(), static_cast<size_t>(bytesRead)};
+            IPCReply reply = nlohmann::json::parse(bufView).get<IPCReply>();
+            if(reply.status == IPCStatus::ERROR) {
+                spdlog::error("Daemon returned an error:\n {}", reply.data.dump(4));
+                return 1;
+            } else {
+                spdlog::info("Success!");
+                spdlog::debug("Daemon returned:\n {}", reply.data.dump(4));
+                return 0;
+            }
+        } catch (const nlohmann::json::exception& e) {
+            spdlog::error("Failed to parse reply: {}", e.what());
+            return 1;
+        }
     }
 
     return 0;

@@ -1,7 +1,6 @@
 #include <cstdlib>
 #include <filesystem>
 #include <string>
-#include <format>
 #include <rz/rzutils.hpp>
 
 #include <spdlog/spdlog.h>
@@ -11,9 +10,10 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "lua.h"
+#include "dispatcher.hpp"
 #include "settings.hpp"
 #include "socketfd.hpp"
+#include "ipc.hpp"
 #include "luapi.hpp"
 
 using AppSettingsFile = rz::json::Saveable<AppSettings>;
@@ -21,9 +21,10 @@ using AppSettingsFile = rz::json::Saveable<AppSettings>;
 inline void LoadConfig(AppSettingsFile& config)
 {
     bool success = config.Load() == rz::STATUS::RZ_SUCCESS;
-    if(!success)
+    if(!success) {
         spdlog::error("Failed to load config!");
-    std::quick_exit(1);
+        std::quick_exit(1);
+    }
 }
 
 int main(void)
@@ -41,11 +42,7 @@ int main(void)
     AppSettingsFile appConfig{configPath, APPSETTINGS_INDENT};
     LoadConfig(appConfig);
 
-    auto* L = luaL_newstate();
-    if(L == nullptr) {
-        spdlog::error("Failed to start a Lua instance");
-        return 1;
-    }
+    LuaWrapper L{};
 
     RegisterLuaFunctions(L);
 
@@ -70,7 +67,14 @@ int main(void)
 
     spdlog::info("Daemon listening on socket: \\0{}", SOCKET_NAME);
 
+    IPCDispatcher dispatcher
+    {{
+        { IPCAction::RUN, [](const auto& args){ return std::unexpected{"TODO"}; } },
+        { IPCAction::STOP, [](const auto& args){ return std::unexpected{"TODO"}; } },
+        { IPCAction::CMD, [](const auto& args){ return std::unexpected{"TODO"}; } },
+    }};
 
+    // probably use poll here later
     while(true)
     {
         SocketFd clientFd{accept(serverFd.get(), nullptr, nullptr)};
@@ -80,8 +84,9 @@ int main(void)
         if(bytesRead > 0) {
             std::string_view msg {buffer.data(), static_cast<size_t>(bytesRead)};
             spdlog::debug("Message received: {}", msg);
-            std::string response {std::format("ACK: {}", msg)};
-            send(clientFd.get(), response.data(), response.size(), 0);
+
+            auto reply = nlohmann::json{dispatcher.dispatch(msg)}.dump(APPSETTINGS_INDENT);
+            send(clientFd.get(), reply.data(), reply.size(), 0);
         }
     }
 
